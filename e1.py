@@ -14,7 +14,7 @@ def main():
     pos += 3*m
 
     periodos = []
-    periodos[0] = total
+    periodos.append(total)
 
 
     
