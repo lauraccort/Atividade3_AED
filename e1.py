@@ -28,14 +28,16 @@ def main():
         periodos.append(total)  # fim do lote: registra L_k
 
     if op == " INSERIR":
+        ident, x, y, lucro, r = (int(t) for t in tokens[pos:pos + 5])
+        pos += 5 + 3 * r          
+        lucros[ident] = lucro
+        total += lucro
 
     elif op == "LUCRO":
-
-    elif op == "MELHOR":
-
-    elif op == "PROSPERIDADE":
-
-
-# ... rotas, lotes de operações e respostas continuam daqui
+        ident, lucro = int(tokens[pos]), int(tokens[pos+1])
+        pos += 2
+        total += lucro - lucros[ident]
+        lucros[ident] = lucro
+        
 if __name__ == "__main__":
     main()
