@@ -1,4 +1,22 @@
 import sys
+
+def novo_kadane():
+    return {"fim_soma" : 0, "fim_ini": 0, "mi" : 0, "mj" : 0, "ms" : 0}
+
+def atualizar_kadane(kadane, k, L):
+    if k > 1 and kadane["fim_soma"] >= 0:
+        kadane["fim_soma"] += L
+    else:
+        kadane["fim_soma"] = L
+        kadane["fim_ini"] = k
+
+    s, i = kadane["fim_soma"], kadane["fim_ini"]
+    if (k == 1 or s > kadane["ms"] or (s == kadane["ms"] and (i, k) < (kadane["mi"], kadane["mj"]))):
+        kadane["mi"], kadane["mj"], kadane["ms"] = i, k, s
+
+def melhor(kadane):
+    return f"{kadane["mi"]} {kadane["mj"]} {kadane["ms"]}"
+
 def main():
     tokens = sys.stdin.read().split()
     n, m, T = int(tokens[0]), int(tokens[1]), int(tokens[2])
@@ -13,8 +31,14 @@ def main():
         pos += 4
     pos += 3*m
 
-    periodos = []
-    periodos.append(total)
+    kadane = novo_kadane()
+    pilha = []
+    soma_pilha = 0
+    saida = []
+
+    k = 1                            # período 1: logo após o setup
+    atualizar_kadane(kadane, k, total)
+    #soma_pilha = atualizar_pilha(pilha, soma_pilha, k, total)
 
     P = int(tokens[pos])
     pos += 1
@@ -25,7 +49,6 @@ def main():
             op = tokens[pos]
             pos += 1
             # aqui entra o tratamento de cada operação
-        periodos.append(total)  # fim do lote: registra L_k
 
     if op == " INSERIR":
         ident, x, y, lucro, r = (int(t) for t in tokens[pos:pos + 5])
@@ -40,9 +63,10 @@ def main():
         lucros[ident] = lucro
 
     elif op == "MELHOR":
+        saida.append(melhor(kadane))
 
-    elif op == "PROSPERIDADE":
-        
+    #elif op == "PROSPERIDADE":
+
         
 if __name__ == "__main__":
     main()

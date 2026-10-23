@@ -159,10 +159,13 @@ def main():
                 pos += 2
                 total += lucro - lucros[ident]  # ajusta pela diferença...
                 lucros[ident] = lucro           # ...e só depois sobrescreve
+
             elif op == "MELHOR":
                 saida.append(melhor(kadane))
+
             elif op == "PROSPERIDADE":
                 saida.append(prosperidade(pilha, soma_pilha))
+                
             elif op == "DIST":       # não aparece no E1; só consome o argumento
                 pos += 1
             # PAR e REMOVER não aparecem no E1 e não têm argumentos
