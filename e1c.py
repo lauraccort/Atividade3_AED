@@ -165,7 +165,7 @@ def main():
 
             elif op == "PROSPERIDADE":
                 saida.append(prosperidade(pilha, soma_pilha))
-                
+
             elif op == "DIST":       # não aparece no E1; só consome o argumento
                 pos += 1
             # PAR e REMOVER não aparecem no E1 e não têm argumentos
@@ -176,7 +176,6 @@ def main():
 
     if saida:
         print("\n".join(saida))
-
 
 if __name__ == "__main__":
     main()

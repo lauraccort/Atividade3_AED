@@ -50,7 +50,7 @@ def main():
             pos += 1
             # aqui entra o tratamento de cada operação
 
-        if op == " INSERIR":
+        if op == "INSERIR":
             ident, x, y, lucro, r = (int(t) for t in tokens[pos:pos + 5])
             pos += 5 + 3 * r          
             lucros[ident] = lucro
@@ -67,6 +67,8 @@ def main():
 
         #elif op == "PROSPERIDADE":
 
+    if saida:
+        print("\n".join(saida))
         
 if __name__ == "__main__":
     main()
