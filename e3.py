@@ -1,1 +1,559 @@
+"""
+Algoritmos e Estruturas de Dados
+Rede de distribuição - Entregável 3: rede de rotas
+Laura da Costa Corte Cordeiro e Ana Helena de Souza Macedo
+
+Estruturas de dados usadas:
+- lucros (dicionário id : lucro, biblioteca do Python, tabela hash): os ids
+  chegam a 10^9, então um vetor indexado por id é inviável; com no máximo
+  5000 depósitos vivos, a tabela dá busca, inserção e atualização em O(1)
+  esperado.
+  Invariante: contém os depósitos vivos e o lucro atual de cada.
+- coords (dicionário id : (x, y)): coordenadas dos depósitos vivos, usadas
+  pelo PAR; mesma justificativa de lucros.
+  Invariante: tem exatamente os mesmos ids de lucros.
+- fila (heap mínimo indexado, chave = lucro): mantém o menor lucro no topo,
+  para que REMOVER não examine todos os vivos; o dicionário pos (id :
+  posição no heap) permite alterar ou remover um id em O(log n).
+  Invariantes: chave de cada pai <= chave dos filhos; pos[ids[i]] == i;
+  a chave de cada id é o seu lucro atual.
+- total (inteiro): soma dos lucros dos depósitos vivos, mantida
+  atualizada por INSERIR (+= L), LUCRO (+= novo - antigo) e REMOVER
+  (-= lucro do removido), para que L_k seja lido em O(1) sem varrer os
+  depósitos.
+  Invariante: após cada operação, total == soma dos valores de lucros.
+- par_cache (string ou None): última resposta do PAR, reutilizada enquanto
+  o conjunto de vivos não muda; nenhuma distância entre pares é guardada.
+  Invariante: se não for None, é a resposta correta para os vivos atuais.
+- saida e entrada (grafo dirigido em lista de adjacência): saida[u] é um
+  dicionário v : custo das rotas u -> v; entrada[v] é um conjunto dos u com
+  rota u -> v. O grafo é esparso (m <= 5n no setup), então uma matriz teria
+  25 milhões de células e listar vizinhos custaria O(n); o conjunto de
+  entrada permite apagar as rotas que chegam a um depósito removido sem
+  varrer o grafo.
+  Invariantes: v está em saida[u] se e somente se u está em entrada[v];
+  toda rota liga dois depósitos vivos.
+- rede (dicionário): agrupa lucros, coords, fila, saida, entrada, total e
+  par_cache, para que remover_deposito atualize tudo em um só lugar.
+- kadane (dicionário): estado da soma máxima de subvetor consecutivo
+  (algoritmo de Kadane), atualizado a cada período, para que
+  MELHOR seja respondido sem reexaminar o histórico.
+  Invariantes: após registrar o período k: fim_soma é a maior soma de um
+  intervalo que termina em k, e fim_ini é o menor início com essa soma;
+  [mi, mj] é o melhor intervalo de 1 até k (empate: menor i, depois menor j)
+  e ms é a sua soma.
+- pilha (lista do Python usada como pilha, de pares [j, r]) e soma_pilha
+  (inteiro): pilha de prosperidade; append e pop no fim da lista custam O(1)
+  amortizado, e a soma dos resíduos é mantida junto, para que PROSPERIDADE
+  seja respondida sem percorrer a pilha.
+  Invariantes: todo resíduo r é > 0; os j crescem da base (pilha[0]) para o
+  topo (pilha[-1]); soma_pilha == soma dos r; se a pilha não está vazia e b
+  é o j da base, soma_pilha == L_b + ... + L_k.
+- saida (lista de strings): respostas acumuladas e impressas de uma vez no
+  final; append em O(1) amortizado.
+
+Notações: n = depósitos vivos, m = rotas vivas, P = períodos registrados,
+h = altura da pilha, k (em REMOVER) = depósitos removidos, g(x) = grau de x
+(rotas que saem de x mais rotas que chegam a x).
+"""
+import sys
+from math import isqrt
+
+def novo_heap():
+    """
+    (a) Recebe: nada.
+    (b) Devolve um heap vazio, um dicionário com ids (ids na ordem do heap,
+        ids[0] é o topo), chaves (chaves[i] é a chave de ids[i]) e pos
+        (id : posição em ids).
+    (c) O(1).
+    """
+    return {"ids": [], "chaves": [], "pos": {}}
+
+def heap_subir(heap, i):
+    """
+    (a) Recebe: heap e i, índice válido; o heap vale em todo ponto 
+    exceto, talvez, entre i e seu pai.
+    (b) Sobe o elemento de i até restaurar a propriedade de heap, atualizando
+        pos a cada movimento. Modifica o heap.
+    (c) O(log n): no máximo a altura do heap, O(1) por nível.
+    """
+    ids, chaves, pos = heap["ids"], heap["chaves"], heap["pos"]
+    ident, chave = ids[i], chaves[i]
+    while i > 0:
+        pai = (i - 1) // 2
+        if chaves[pai] <= chave:
+            break
+        ids[i], chaves[i] = ids[pai], chaves[pai]   
+        pos[ids[i]] = i
+        i = pai
+    ids[i], chaves[i] = ident, chave
+    pos[ident] = i
+
+def heap_descer(heap, i):
+    """
+    (a) Recebe: heap e i, índice válido; o heap vale em todo ponto exceto,
+        talvez, entre i e seus filhos.
+    (b) Desce o elemento de i, trocando com o menor filho, até restaurar a
+        propriedade de heap, atualizando pos. Modifica o heap.
+    (c) O(log n): no máximo a altura do heap, O(1) por nível.
+    """
+    ids, chaves, pos = heap["ids"], heap["chaves"], heap["pos"]
+    tam = len(ids)
+    ident, chave = ids[i], chaves[i]
+    while True:
+        filho = 2 * i + 1
+        if filho >= tam:
+            break
+        if filho + 1 < tam and chaves[filho + 1] < chaves[filho]:
+            filho += 1                                
+        if chaves[filho] >= chave:
+            break
+        ids[i], chaves[i] = ids[filho], chaves[filho]  
+        pos[ids[i]] = i
+        i = filho
+    ids[i], chaves[i] = ident, chave
+    pos[ident] = i
+
+def heap_inserir(heap, ident, chave):
+    """
+    (a) Recebe: heap, id que ainda não está no heap e chave.
+    (b) Coloca o elemento no fim e o sobe. Modifica o heap.
+    (c) O(log n): append O(1) amortizado e um heap_subir.
+    """
+    heap["ids"].append(ident)
+    heap["chaves"].append(chave)
+    heap["pos"][ident] = len(heap["ids"]) - 1
+    heap_subir(heap, len(heap["ids"]) - 1)
+
+def heap_alterar(heap, ident, chave):
+    """
+    (a) Recebe: heap, id presente no heap e uma nova chave.
+    (b) Troca a chave e reposiciona: sobe se diminuiu, desce se aumentou.
+        Modifica o heap.
+    (c) O(log n): busca em pos O(1) esperado e um heap_subir ou heap_descer.
+    """
+    i = heap["pos"][ident]
+    antiga = heap["chaves"][i]
+    heap["chaves"][i] = chave
+    if chave < antiga:
+        heap_subir(heap, i)
+    elif chave > antiga:
+        heap_descer(heap, i)
+
+def heap_remover(heap, ident):
+    """
+    (a) Recebe: heap e id presente no heap.
+    (b) Remove o elemento: o último ocupa o lugar dele e é reposicionado
+        (sobe ou desce). Modifica o heap.
+    (c) O(log n): pop O(1) e um heap_subir ou heap_descer.
+    """
+    ids, chaves, pos = heap["ids"], heap["chaves"], heap["pos"]
+    i = pos.pop(ident)
+    ultimo_id = ids.pop()
+    ultima_chave = chaves.pop()
+    if i == len(ids):                 
+        return
+    ids[i], chaves[i] = ultimo_id, ultima_chave
+    pos[ultimo_id] = i
+    if i > 0 and chaves[(i - 1) // 2] > ultima_chave:
+        heap_subir(heap, i)
+    else:
+        heap_descer(heap, i)
+
+def heap_extrair_min(heap):
+    """
+    (a) Recebe: heap não vazio.
+    (b) Remove e devolve o par (chave, id) de menor chave. Modifica o heap.
+    (c) O(log n): leitura do topo O(1) e um heap_remover.
+    """
+    chave, ident = heap["chaves"][0], heap["ids"][0]
+    heap_remover(heap, ident)
+    return chave, ident
+
+def nova_rede():
+    """
+    (a) Recebe: nada.
+    (b) Devolve uma rede vazia, um dicionário com os campos:
+        - lucros (dicionário id : lucro) e coords (dicionário id : (x, y)) dos vivos;
+        - fila (heap de novo_heap): um elemento por vivo, chave = lucro;
+        - saida (dicionário id : {v : custo}) e entrada (dicionário id :
+          conjunto de u): rotas que saem de e chegam a cada vivo;
+        - total (int): soma dos lucros dos vivos;
+        - par_cache (str ou None): resposta do PAR para os vivos atuais, ou
+          None se precisa ser recalculada.
+        Invariantes entre as operações:
+        - lucros, coords, fila, saida e entrada têm exatamente os mesmos
+          ids, e a chave de cada id na fila é lucros[id];
+        - v está em saida[u] se e somente se u está em entrada[v];
+        - total == soma de lucros.values();
+        - par_cache, se não for None, é a resposta correta para os vivos
+          atuais (inserir ou remover zera; mudar lucro não afeta).
+    (c) O(1).
+    """
+    return {"lucros": {}, "coords": {}, "fila": novo_heap(), "saida": {}, "entrada": {},
+            "total": 0, "par_cache": None}
+
+def inserir_deposito(rede, ident, x, y, lucro):
+    """
+    (a) Recebe: rede, ident (id novo, nunca usado), coordenadas x, y e lucro.
+    (b) Cria o depósito vivo em lucros, coords e fila, cria o vértice sem
+        rotas no grafo, soma o lucro ao total e invalida par_cache.
+        Modifica a rede. As rotas são acrescentadas depois, por inserir_rota.
+    (c) O(log n): inserções em dict O(1) esperado e heap_inserir O(log n).
+    """
+    rede["lucros"][ident] = lucro
+    rede["coords"][ident] = (x, y)
+    heap_inserir(rede["fila"], ident, lucro)
+    rede["saida"][ident] = {}
+    rede["entrada"][ident] = set()
+    rede["total"] += lucro
+    rede["par_cache"] = None
+
+def inserir_rota(rede, u, v, c):
+    """
+    (a) Recebe: rede, u e v (depósitos vivos distintos, sem rota u -> v
+        ainda) e c (custo inteiro positivo).
+    (b) Acrescenta a rota dirigida u -> v com custo c, nos dois lados
+        (saida[u] e entrada[v]), mantendo o invariante do grafo.
+    (c) O(1) esperado: uma inserção em dict e uma em set.
+    """
+    rede["saida"][u][v] = c
+    rede["entrada"][v].add(u)
+
+def mudar_lucro(rede, ident, lucro):
+    """
+    (a) Recebe: rede, ident (depósito vivo) e o novo lucro.
+    (b) Ajusta o total pela diferença, grava o novo lucro e reposiciona o
+        depósito na fila, as coordenadas não mudam.
+    (c) O(log n): acesso ao dict O(1) esperado e heap_alterar O(log n).
+    """
+    rede["total"] += lucro - rede["lucros"][ident]
+    rede["lucros"][ident] = lucro
+    heap_alterar(rede["fila"], ident, lucro)
+
+def remover_deposito(rede, ident):
+    """
+    (a) Recebe: rede e ident (depósito vivo).
+    (b) Função única de remoção: tira o depósito da fila, de lucros e de
+        coords, apaga todas as rotas que saem dele ou chegam a ele (nos dois
+        lados do grafo) e o vértice, desconta o lucro do total e invalida
+        par_cache. Modifica a rede.
+    (c) O(log n + g(ident)) esperado: heap_remover O(log n); uma remoção
+        O(1) esperado para cada rota que toca o depósito; o conjunto de
+        entrada evita varrer o grafo para achar quem aponta para ele.
+    """
+    heap_remover(rede["fila"], ident)
+    rede["total"] -= rede["lucros"].pop(ident)
+    del rede["coords"][ident]
+
+    saida, entrada = rede["saida"], rede["entrada"]
+    for u in entrada.pop(ident):      
+        del saida[u][ident]
+    for v in saida.pop(ident):        
+        entrada[v].discard(ident)
+
+    rede["par_cache"] = None
+
+def remover_abaixo(rede, T):
+    """
+    (a) Recebe: rede e a tolerância mínima de lucro (T).
+    (b) Fecha todos os vivos com lucro estritamente menor que T. 
+    Devolve quantos foram removidos e modifica a rede.
+    (c) O(k log n + soma dos graus dos removidos), com k removidos: cada
+        remoção custa O(log n + g); o teste do topo é O(1); os demais vivos
+        não são examinados.
+    """
+    fila = rede["fila"]
+    removidos = 0
+    while fila["ids"] and fila["chaves"][0] < T:
+        remover_deposito(rede, fila["ids"][0])
+        removidos += 1
+    return removidos
+
+def dist(rede, s):
+    """
+    (a) Recebe: rede e s (depósito vivo).
+    (b) Calcula, com Dijkstra, o menor custo de s a cada vivo, seguindo a
+        direção das rotas (saida). Devolve a linha de resposta: os custos
+        para os demais vivos em ordem crescente de id, separados por espaço,
+        com -1 para os inalcançáveis; string vazia se s é o único vivo.
+        Usa uma instância nova do heap (chave = distância), separada da fila
+        de lucros. Não modifica a rede.
+        Corretude: os custos são positivos, então, quando u sai do heap com
+        a menor distância provisória, nenhum caminho ainda não examinado
+        pode melhorá-la (ele passaria por um vértice com distância >= a de u
+        e só acrescentaria custo); por isso cada u é finalizado ao sair.
+    (c) O((n + m) log n): cada vivo entra e sai do heap no máximo uma vez
+        (O(log n) cada) e cada rota é relaxada uma vez, com no máximo uma
+        alteração de chave O(log n). Mais O(n log n) para ordenar os ids da
+        saída. Espaço adicional O(n) (distâncias e heap).
+    """
+    saida = rede["saida"]
+    distancia = {s: 0}
+    heap = novo_heap()
+    heap_inserir(heap, s, 0)
+
+    while heap["ids"]:
+        d, u = heap_extrair_min(heap)   
+        for v, c in saida[u].items():   
+            nd = d + c
+            if v not in distancia:      
+                distancia[v] = nd
+                heap_inserir(heap, v, nd)
+            elif nd < distancia[v]:     
+                distancia[v] = nd
+                heap_alterar(heap, v, nd)
+
+    partes = []
+    for ident in sorted(rede["lucros"]):
+        if ident != s:
+            partes.append(str(distancia.get(ident, -1)))
+    return " ".join(partes)
+
+def par_rec(pts, lo, hi):
+    """
+    (a) Recebe: pts, lista de tuplas (x, y, id) com pts[lo:hi] ordenado por
+        x (empates por y); lo e hi com hi - lo >= 2. 
+    (b) Devolve (d2, a, b): o menor quadrado de distância entre dois pontos
+        de pts[lo:hi] e os ids desses pontos. Ao terminar, pts[lo:hi] fica
+        ordenado por y (modifica pts nesse trecho).
+        Divide ao meio por índice (não por valor de x, que pode repetir),
+        resolve as metades e depois procura, na faixa vertical em torno da
+        divisória com (x - xm)^2 < d2, pares que cruzam as metades.
+    (c) O(m log m), m = hi - lo: T(m) = 2T(m/2) + O(m). O passo O(m) é a
+        junção das metades por y (sorted reconhece as duas sequências já
+        ordenadas e só as intercala), a montagem da faixa e sua varredura,
+        em que cada ponto é comparado com O(1) vizinhos (no máximo 7: num
+        retângulo d x 2d cabem poucos pontos a distância >= d entre si).
+        Espaço adicional O(m); profundidade da recursão O(log m).
+    """
+    if hi - lo <= 3:                                  
+        melhor_par = None
+        for i in range(lo, hi):
+            xi, yi, ai = pts[i]
+            for j in range(i + 1, hi):
+                xj, yj, aj = pts[j]
+                d2 = (xi - xj) ** 2 + (yi - yj) ** 2
+                if melhor_par is None or d2 < melhor_par[0]:
+                    melhor_par = (d2, ai, aj)
+        pts[lo:hi] = sorted(pts[lo:hi], key=lambda p: p[1])
+        return melhor_par
+
+    meio = (lo + hi) // 2
+    xm = pts[meio][0]               
+    esq = par_rec(pts, lo, meio)
+    dir_ = par_rec(pts, meio, hi)
+    melhor_par = esq if esq[0] <= dir_[0] else dir_
+
+    pts[lo:hi] = sorted(pts[lo:hi], key=lambda p: p[1])   # junção por y
+    d2_min = melhor_par[0]
+    faixa = [p for p in pts[lo:hi] if (p[0] - xm) ** 2 < d2_min]
+    for i in range(len(faixa)):
+        xi, yi, ai = faixa[i]
+        for j in range(i + 1, len(faixa)):
+            xj, yj, aj = faixa[j]
+            dy = yj - yi
+            if dy * dy >= d2_min:   
+                break
+            d2 = (xi - xj) ** 2 + dy * dy
+            if d2 < d2_min:
+                d2_min = d2
+                melhor_par = (d2, ai, aj)
+    return melhor_par
+
+def par(rede):
+    """
+    (a) Recebe: rede, com pelo menos dois vivos de coordenadas distintas.
+    (b) Devolve "a b d": ids a < b do par mais próximo e a distância
+        arredondada para cima, em aritmética inteira (menor t com
+        t*t >= d2). Usa par_cache se válido; senão ordena os pontos por x,
+        chama par_rec e guarda a resposta em par_cache.
+    (c) O(n log n) sem cache (ordenação + par_rec); O(1) com cache.
+        Espaço adicional O(n) para a lista de pontos, descartada ao final.
+    """
+    if rede["par_cache"] is None:
+        pts = sorted((x, y, ident) for ident, (x, y) in rede["coords"].items())
+        d2, a, b = par_rec(pts, 0, len(pts))
+        if a > b:
+            a, b = b, a
+        t = isqrt(d2)              
+        if t * t < d2:              
+            t += 1
+        rede["par_cache"] = f"{a} {b} {t}"
+    return rede["par_cache"]
+
+def novo_kadane():
+    """
+    (a) Recebe: nada.
+    (b) Devolve o estado inicial da soma máxima de subvetor consecutivo
+        (algoritmo de Kadane), um dicionário com fim_soma e
+        fim_ini (soma e início do melhor intervalo que termina no último
+        período) e mi, mj, ms (melhor intervalo global [mi, mj] e sua soma).
+    (c) O(1).
+    """
+    return {"fim_soma" : 0, "fim_ini": 0, "mi" : 0, "mj" : 0, "ms" : 0}
+
+def atualizar_kadane(kadane, k, L):
+    """
+    (a) Recebe: kadane (criado por novo_kadane), k (período registrado,
+        chamado em ordem crescente e contínua a partir de 1)
+        e L (lucro L_k).
+    (b) Atualiza o melhor intervalo que termina em k (estende se a soma
+        anterior for >= 0, o que mantém o menor início no empate; senão
+        recomeça em k) e o melhor intervalo global. Não devolve nada e
+        modifica o kadane.
+    (c) O(1): poucas operações e atribuições.
+    """
+    if k > 1 and kadane["fim_soma"] >= 0:
+        kadane["fim_soma"] += L
+    else:
+        kadane["fim_soma"] = L
+        kadane["fim_ini"] = k
+
+    s, i = kadane["fim_soma"], kadane["fim_ini"]
+    if (k == 1 or s > kadane["ms"] or (s == kadane["ms"] and (i, k) < (kadane["mi"], kadane["mj"]))):
+        kadane["mi"], kadane["mj"], kadane["ms"] = i, k, s
+
+def melhor(kadane):
+    """
+    (a) Recebe: kadane, com pelo menos um período registrado.
+    (b) Devolve a string "i j S" do melhor intervalo de períodos já
+        registrados. Não modifica nada.
+    (c) O(1): só lê o estado mantido por atualizar_kadane.
+    """
+    return f"{kadane["mi"]} {kadane["mj"]} {kadane["ms"]}"
+
+def atualizar_pilha(pilha, soma, k, L):
+    """
+    (a) Recebe: pilha (lista de pares [j, r], base em pilha[0], topo em
+        pilha[-1], todo r > 0), soma (soma atual dos resíduos), k (período
+        registrado) e L (lucro L_k).
+    (b) Aplica a regra da pilha de prosperidade: L > 0 empilha (k, L);
+        L = 0 não muda nada; L < 0 consome o prejuízo a partir do topo,
+        reduzindo ou desempilhando elementos (a sobra é descartada).
+        Devolve a nova soma dos resíduos; modifica a pilha.
+    (c) O(1) amortizado: cada elemento é empilhado uma vez e desempilhado no
+        máximo uma vez, então o while não custa mais que os pushes.
+    """
+    if L > 0:
+        pilha.append([k, L])
+        soma += L
+    elif L < 0:
+        d = -L
+        while d > 0 and pilha:
+            j, r = pilha[-1]
+            if r > d:
+                pilha[-1][1] = r - d
+                soma -= d
+                d = 0
+            else:
+                pilha.pop()
+                soma -= r
+                d -= r
+    return soma
+
+def prosperidade(pilha, soma):
+    """
+    (a) Recebe: a pilha de prosperidade e a soma dos seus resíduos.
+    (b) Devolve "0" se a pilha estiver vazia; senão "h b s i r" (altura,
+        período da base, soma dos resíduos, período e resíduo do topo).
+        Não modifica nada.
+    (c) O(1): len, base e topo por índice, soma já mantida.
+    """
+    if not pilha:
+        return "0"
+    b = pilha[0][0]
+    i, r = pilha[-1]
+
+    return f"{len(pilha)} {b} {soma} {i} {r}"
+
+def main():
+    """
+    (a) Recebe: a entrada padrão no formato do enunciado.
+    (b) Lê o setup (depósitos e depois rotas, agora guardadas no grafo),
+        executa os lotes e registra cada período ao fim do seu lote. Escreve
+        uma linha por DIST, PAR, REMOVER, MELHOR e PROSPERIDADE na saída
+        padrão, na ordem de execução.
+    (c) Por comando (n = vivos, m = rotas vivas no momento):
+        - INSERIR: inserir_deposito O(log n) + r inserir_rota O(1) esperado;
+        - LUCRO: mudar_lucro, O(log n);
+        - REMOVER: remover_abaixo, O(k log n + graus dos removidos);
+        - DIST: dist, O((n + m) log n);
+        - PAR: par, O(n log n), ou O(1) se os vivos não mudaram;
+        - MELHOR, PROSPERIDADE: O(1);
+        - registro de cada período: O(1) amortizado.
+        Espaço: O(n + m + tamanho da entrada).
+    """
+    tokens = sys.stdin.read().split()
+    n, m, T = int(tokens[0]), int(tokens[1]), int(tokens[2])
+    pos = 3
+
+    rede = nova_rede()
+    for _ in range(n): 
+        ident, x, y, lucro = (int(t) for t in tokens[pos:pos + 4])
+        inserir_deposito(rede, ident, x, y, lucro)
+        pos += 4
+    for _ in range(m):              
+        u, v, c = int(tokens[pos]), int(tokens[pos + 1]), int(tokens[pos + 2])
+        inserir_rota(rede, u, v, c)
+        pos += 3
+
+    kadane = novo_kadane()
+    pilha = []
+    soma_pilha = 0
+    saida = []
+
+    k = 1                            
+    atualizar_kadane(kadane, k, rede["total"])
+    soma_pilha = atualizar_pilha(pilha, soma_pilha, k, rede["total"])
+
+    P = int(tokens[pos])
+    pos += 1
+    for _ in range(P):          
+        q = int(tokens[pos])
+        pos += 1
+        for _ in range(q):     
+            op = tokens[pos]
+            pos += 1
+
+            if op == "INSERIR":
+                ident, x, y, lucro, r = (int(t) for t in tokens[pos:pos + 5])
+                pos += 5
+                inserir_deposito(rede, ident, x, y, lucro)
+                for _ in range(r):
+                    u, v, c = int(tokens[pos]), int(tokens[pos + 1]), int(tokens[pos + 2])
+                    inserir_rota(rede, u, v, c)
+                    pos += 3
+
+            elif op == "LUCRO":
+                ident, lucro = int(tokens[pos]), int(tokens[pos+1])
+                pos += 2
+                mudar_lucro(rede, ident, lucro)
+
+            elif op == "MELHOR":
+                saida.append(melhor(kadane))
+
+            elif op == "PROSPERIDADE":
+                saida.append(prosperidade(pilha, soma_pilha))
+
+            elif op == "DIST":
+                s = int(tokens[pos])
+                pos += 1
+                saida.append(dist(rede, s))
+
+            elif op == "REMOVER":
+                saida.append(str(remover_abaixo(rede, T)))
+
+            elif op == "PAR":
+                saida.append(par(rede))
+
+        k += 1                      
+        atualizar_kadane(kadane, k, rede["total"])
+        soma_pilha = atualizar_pilha(pilha, soma_pilha, k, rede["total"])
+
+    if saida:
+        print("\n".join(saida))
+        
+if __name__ == "__main__":
+    main()
 

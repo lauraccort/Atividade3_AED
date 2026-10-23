@@ -425,7 +425,6 @@ def main():
                 pos += 5 + 3 * r          
                 inserir_deposito(rede, ident, x, y, lucro)
 
-
             elif op == "LUCRO":
                 ident, lucro = int(tokens[pos]), int(tokens[pos+1])
                 pos += 2
