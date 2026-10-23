@@ -50,22 +50,22 @@ def main():
             pos += 1
             # aqui entra o tratamento de cada operação
 
-    if op == " INSERIR":
-        ident, x, y, lucro, r = (int(t) for t in tokens[pos:pos + 5])
-        pos += 5 + 3 * r          
-        lucros[ident] = lucro
-        total += lucro
+        if op == " INSERIR":
+            ident, x, y, lucro, r = (int(t) for t in tokens[pos:pos + 5])
+            pos += 5 + 3 * r          
+            lucros[ident] = lucro
+            total += lucro
 
-    elif op == "LUCRO":
-        ident, lucro = int(tokens[pos]), int(tokens[pos+1])
-        pos += 2
-        total += lucro - lucros[ident]
-        lucros[ident] = lucro
+        elif op == "LUCRO":
+            ident, lucro = int(tokens[pos]), int(tokens[pos+1])
+            pos += 2
+            total += lucro - lucros[ident]
+            lucros[ident] = lucro
 
-    elif op == "MELHOR":
-        saida.append(melhor(kadane))
+        elif op == "MELHOR":
+            saida.append(melhor(kadane))
 
-    #elif op == "PROSPERIDADE":
+        #elif op == "PROSPERIDADE":
 
         
 if __name__ == "__main__":
