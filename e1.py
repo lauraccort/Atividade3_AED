@@ -17,6 +17,32 @@ def atualizar_kadane(kadane, k, L):
 def melhor(kadane):
     return f"{kadane["mi"]} {kadane["mj"]} {kadane["ms"]}"
 
+def atualizar_pilha(pilha, soma, k, L):
+    if L > 0:
+        pilha.append([k, L])
+        soma += L
+    elif L < 0:
+        d -= L
+        while d > 0 and pilha:
+            j, r = pilha[-1]
+            if r > d:
+                pilha[-1][1] = r - d
+                soma -= d
+                d = 0
+            else:
+                pilha.pop()
+                soma -= r
+                d -= r
+    return soma
+
+def prosperidade(pilha, soma):
+    if not pilha:
+        return "0"
+    b = pilha[0][0]
+    i, r = pilha[-1]
+
+    return f"{len(pilha)} {b} {soma} {i} {r}"
+
 def main():
     tokens = sys.stdin.read().split()
     n, m, T = int(tokens[0]), int(tokens[1]), int(tokens[2])
@@ -38,7 +64,7 @@ def main():
 
     k = 1                            # período 1: logo após o setup
     atualizar_kadane(kadane, k, total)
-    #soma_pilha = atualizar_pilha(pilha, soma_pilha, k, total)
+    soma_pilha = atualizar_pilha(pilha, soma_pilha, k, total)
 
     P = int(tokens[pos])
     pos += 1
@@ -65,7 +91,8 @@ def main():
             elif op == "MELHOR":
                 saida.append(melhor(kadane))
 
-            #elif op == "PROSPERIDADE":
+            elif op == "PROSPERIDADE":
+                saida.append(prosperidade(pilha, soma_pilha))
 
         k += 1                      
         atualizar_kadane(kadane, k, total)
