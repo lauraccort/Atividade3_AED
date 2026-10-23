@@ -2,9 +2,26 @@
 import sys
 
 def novo_kadane():
+    """
+    (a) Recebe: nada.
+    (b) Devolve o estado inicial da soma máxima de subvetor consecutivo
+        (algoritmo de Kadane), um dicionário com fim_soma e
+        fim_ini (soma e início do melhor intervalo que termina no último
+        período) e mi, mj, ms (melhor intervalo global [mi, mj] e sua soma).
+    (c) O(1).
+    """
     return {"fim_soma" : 0, "fim_ini": 0, "mi" : 0, "mj" : 0, "ms" : 0}
 
 def atualizar_kadane(kadane, k, L):
+    """
+    (a) Recebe: kadane (criado por novo_kadane), k (período
+        registrado, chamado em ordem crescente) e L (lucro L_k).
+    (b) Atualiza o melhor intervalo que termina em k (estende se a soma
+        anterior for >= 0, o que mantém o menor início no empate; senão
+        recomeça em k) e o melhor intervalo global. Não devolve nada e
+        modifica o kadane.
+    (c) O(1)
+    """
     if k > 1 and kadane["fim_soma"] >= 0:
         kadane["fim_soma"] += L
     else:
@@ -16,9 +33,26 @@ def atualizar_kadane(kadane, k, L):
         kadane["mi"], kadane["mj"], kadane["ms"] = i, k, s
 
 def melhor(kadane):
+    """
+    (a) Recebe: kadane, com pelo menos um período registrado.
+    (b) Devolve a string "i j s" do melhor intervalo de períodos já
+        registrados. Não modifica nada.
+    (c) O(1): só lê o estado mantido por atualizar_kadane.
+    """
     return f"{kadane["mi"]} {kadane["mj"]} {kadane["ms"]}"
 
 def atualizar_pilha(pilha, soma, k, L):
+    """
+    (a) Recebe: pilha (lista de pares [j, r], base em pilha[0], topo em
+        pilha[-1], todo r > 0), soma (soma atual dos resíduos), k (período
+        registrado) e L (lucro L_k).
+    (b) Aplica a regra da pilha de prosperidade: L > 0 empilha (k, L);
+        L = 0 não muda nada; L < 0 consome o prejuízo a partir do topo,
+        reduzindo ou desempilhando elementos (a sobra é descartada).
+        Devolve a nova soma dos resíduos; modifica a pilha.
+    (c) O(1) amortizado: cada elemento é empilhado uma vez e desempilhado no
+        máximo uma vez, então o while não custa mais que os pushes.
+    """
     if L > 0:
         pilha.append([k, L])
         soma += L
@@ -37,6 +71,13 @@ def atualizar_pilha(pilha, soma, k, L):
     return soma
 
 def prosperidade(pilha, soma):
+    """
+    (a) Recebe: a pilha de prosperidade e a soma dos seus resíduos.
+    (b) Devolve "0" se a pilha estiver vazia; senão "h b s i r" (altura,
+        período da base, soma dos resíduos, período e resíduo do topo).
+        Não modifica nada.
+    (c) O(1): len, base e topo por índice, soma já mantida.
+    """
     if not pilha:
         return "0"
     b = pilha[0][0]
@@ -45,6 +86,15 @@ def prosperidade(pilha, soma):
     return f"{len(pilha)} {b} {soma} {i} {r}"
 
 def main():
+    """
+    (a) Recebe: a entrada padrão conforme o enunciado.
+    (b) Lê o setup inicial (rotas descartadas), executa INSERIR, LUCRO, MELHOR e
+        PROSPERIDADE de cada lote e registra cada período ao fim do seu lote.
+        Escreve uma linha por MELHOR e PROSPERIDADE na saída padrão.
+    (c) Por comando: INSERIR e LUCRO O(1) esperado (dicionário); MELHOR e
+        PROSPERIDADE O(1); registro de período O(1) amortizado. Total
+        O(tamanho da entrada). Espaço: O(n + tamanho da entrada).
+    """
     tokens = sys.stdin.read().split()
     n, m, T = int(tokens[0]), int(tokens[1]), int(tokens[2])
     pos = 3
