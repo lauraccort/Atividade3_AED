@@ -1,3 +1,4 @@
+#Entregável 1 - Laura da Costa Corte Cordeiro e Ana Helena de Souza Macedo
 import sys
 
 def novo_kadane():
@@ -62,19 +63,18 @@ def main():
     soma_pilha = 0
     saida = []
 
-    k = 1                            # período 1: logo após o setup
+    k = 1                            
     atualizar_kadane(kadane, k, total)
     soma_pilha = atualizar_pilha(pilha, soma_pilha, k, total)
 
     P = int(tokens[pos])
     pos += 1
-    for _ in range(P):          # um lote por período (2 até P+1)
+    for _ in range(P):          
         q = int(tokens[pos])
         pos += 1
-        for _ in range(q):      # as q operações do lote
+        for _ in range(q):     
             op = tokens[pos]
             pos += 1
-            # aqui entra o tratamento de cada operação
 
             if op == "INSERIR":
                 ident, x, y, lucro, r = (int(t) for t in tokens[pos:pos + 5])
