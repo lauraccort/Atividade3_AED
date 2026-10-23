@@ -376,12 +376,10 @@ def main():
     n, m, T = int(tokens[0]), int(tokens[1]), int(tokens[2])
     pos = 3
 
-    lucros = {}
-    total = 0
+    rede = nova_rede()
     for _ in range(n): 
         ident, x, y, lucro = (int(t) for t in tokens[pos:pos + 4])
-        lucros[ident] = lucro
-        total += lucro
+        inserir_deposito(rede, ident, x, y, lucro)
         pos += 4
     pos += 3*m
 
@@ -391,8 +389,8 @@ def main():
     saida = []
 
     k = 1                            
-    atualizar_kadane(kadane, k, total)
-    soma_pilha = atualizar_pilha(pilha, soma_pilha, k, total)
+    atualizar_kadane(kadane, k, rede["total"])
+    soma_pilha = atualizar_pilha(pilha, soma_pilha, k, rede["total"])
 
     P = int(tokens[pos])
     pos += 1
@@ -406,14 +404,13 @@ def main():
             if op == "INSERIR":
                 ident, x, y, lucro, r = (int(t) for t in tokens[pos:pos + 5])
                 pos += 5 + 3 * r          
-                lucros[ident] = lucro
-                total += lucro
+                inserir_deposito(rede, ident, x, y, lucro)
+
 
             elif op == "LUCRO":
                 ident, lucro = int(tokens[pos]), int(tokens[pos+1])
                 pos += 2
-                total += lucro - lucros[ident]
-                lucros[ident] = lucro
+                mudar_lucro(rede, ident, lucro)
 
             elif op == "MELHOR":
                 saida.append(melhor(kadane))
@@ -422,13 +419,14 @@ def main():
                 saida.append(prosperidade(pilha, soma_pilha))
 
             elif op == "REMOVER":
+                saida.append(str(remover_abaixo(rede, T)))
 
             elif op == "PAR":
-                
+                saida.append(par(rede))
 
         k += 1                      
-        atualizar_kadane(kadane, k, total)
-        soma_pilha = atualizar_pilha(pilha, soma_pilha, k, total)
+        atualizar_kadane(kadane, k, rede["total"])
+        soma_pilha = atualizar_pilha(pilha, soma_pilha, k, rede["total"])
 
     if saida:
         print("\n".join(saida))
