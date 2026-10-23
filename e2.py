@@ -418,6 +418,9 @@ def main():
             elif op == "PROSPERIDADE":
                 saida.append(prosperidade(pilha, soma_pilha))
 
+            elif op == "DIST":
+                pos += 1
+
             elif op == "REMOVER":
                 saida.append(str(remover_abaixo(rede, T)))
 

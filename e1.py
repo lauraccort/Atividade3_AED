@@ -178,6 +178,9 @@ def main():
             elif op == "PROSPERIDADE":
                 saida.append(prosperidade(pilha, soma_pilha))
 
+            elif op == "DIST":
+                pos += 1
+
         k += 1                      
         atualizar_kadane(kadane, k, total)
         soma_pilha = atualizar_pilha(pilha, soma_pilha, k, total)
