@@ -9,10 +9,24 @@ Estruturas de dados usadas:
   5000 depósitos vivos, a tabela dá busca, inserção e atualização em O(1)
   esperado.
   Invariante: contém os depósitos vivos e o lucro atual de cada.
+- coords (dicionário id : (x, y)): coordenadas dos depósitos vivos, usadas
+  pelo PAR; mesma justificativa de lucros.
+  Invariante: tem exatamente os mesmos ids de lucros.
+- fila (heap mínimo indexado, chave = lucro): mantém o menor lucro no topo,
+  para que REMOVER não examine todos os vivos; o dicionário pos (id :
+  posição no heap) permite alterar ou remover um id em O(log n).
+  Invariantes: chave de cada pai <= chave dos filhos; pos[ids[i]] == i;
+  a chave de cada id é o seu lucro atual.
 - total (inteiro): soma dos lucros dos depósitos vivos, mantida
-  atualizada por INSERIR (+= L) e LUCRO (+= novo - antigo), para que
-  L_k seja lido em O(1) sem varrer os depósitos.
+  atualizada por INSERIR (+= L), LUCRO (+= novo - antigo) e REMOVER
+  (-= lucro do removido), para que L_k seja lido em O(1) sem varrer os
+  depósitos.
   Invariante: após cada operação, total == soma dos valores de lucros.
+- par_cache (string ou None): última resposta do PAR, reutilizada enquanto
+  o conjunto de vivos não muda; nenhuma distância entre pares é guardada.
+  Invariante: se não for None, é a resposta correta para os vivos atuais.
+- rede (dicionário): agrupa lucros, coords, fila, total e par_cache, para
+  que remover_deposito atualize tudo em um só lugar.
 - kadane (dicionário): estado da soma máxima de subvetor consecutivo
   (algoritmo de Kadane), atualizado a cada período, para que
   MELHOR seja respondido sem reexaminar o histórico.
@@ -30,7 +44,8 @@ Estruturas de dados usadas:
 - saida (lista de strings): respostas acumuladas e impressas de uma vez no
   final; append em O(1) amortizado.
 
-Notações: n = depósitos vivos, P = períodos registrados, h = altura da pilha.
+Notações: n = depósitos vivos, P = períodos registrados, h = altura da pilha,
+k (em REMOVER) = depósitos removidos.
 """
 import sys
 from math import isqrt
@@ -38,7 +53,9 @@ from math import isqrt
 def novo_heap():
     """
     (a) Recebe: nada.
-    (b) 
+    (b) Devolve um heap vazio, um dicionário com ids (ids na ordem do heap,
+        ids[0] é o topo), chaves (chaves[i] é a chave de ids[i]) e pos
+        (id : posição em ids).
     (c) O(1).
     """
     return {"ids": [], "chaves": [], "pos": {}}
@@ -365,12 +382,14 @@ def prosperidade(pilha, soma):
 def main():
     """
     (a) Recebe: a entrada padrão conforme o enunciado.
-    (b) Lê o setup inicial (rotas descartadas), executa INSERIR, LUCRO, MELHOR e
-        PROSPERIDADE de cada lote e registra cada período ao fim do seu lote.
-        Escreve uma linha por MELHOR e PROSPERIDADE na saída padrão.
-    (c) Por comando: INSERIR e LUCRO O(1) esperado (dicionário); MELHOR e
-        PROSPERIDADE O(1); registro de período O(1) amortizado. Total
-        O(tamanho da entrada). Espaço: O(n + tamanho da entrada).
+    (b) Lê o setup inicial (rotas descartadas), executa INSERIR, LUCRO, REMOVER,
+        PAR, MELHOR e PROSPERIDADE de cada lote (de DIST só lê o argumento) e
+        registra cada período ao fim do seu lote. Escreve uma linha por
+        REMOVER, PAR, MELHOR e PROSPERIDADE na saída padrão.
+    (c) Por comando: INSERIR e LUCRO O(log n) (heap); REMOVER O((k+1) log n);
+        PAR O(n log n), ou O(1) com par_cache; MELHOR e PROSPERIDADE O(1);
+        registro de período O(1) amortizado. Espaço: O(n + tamanho da
+        entrada).
     """
     tokens = sys.stdin.read().split()
     n, m, T = int(tokens[0]), int(tokens[1]), int(tokens[2])
