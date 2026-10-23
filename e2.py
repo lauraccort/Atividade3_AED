@@ -33,6 +33,249 @@ Estruturas de dados usadas:
 Notações: n = depósitos vivos, P = períodos registrados, h = altura da pilha.
 """
 import sys
+from math import isqrt
+
+def novo_heap():
+    """
+    (a) Recebe: nada.
+    (b) 
+    (c) O(1).
+    """
+    return {"ids": [], "chaves": [], "pos": {}}
+
+def heap_subir(heap, i):
+    """
+    (a) Recebe: heap e i, índice válido; o heap vale em todo ponto 
+    exceto, talvez, entre i e seu pai.
+    (b) Sobe o elemento de i até restaurar a propriedade de heap, atualizando
+        pos a cada movimento. Modifica o heap.
+    (c) O(log n): no máximo a altura do heap, O(1) por nível.
+    """
+    ids, chaves, pos = heap["ids"], heap["chaves"], heap["pos"]
+    ident, chave = ids[i], chaves[i]
+    while i > 0:
+        pai = (i - 1) // 2
+        if chaves[pai] <= chave:
+            break
+        ids[i], chaves[i] = ids[pai], chaves[pai]   
+        pos[ids[i]] = i
+        i = pai
+    ids[i], chaves[i] = ident, chave
+    pos[ident] = i
+
+def heap_descer(heap, i):
+    """
+    (a) Recebe: heap e i, índice válido; o heap vale em todo ponto exceto,
+        talvez, entre i e seus filhos.
+    (b) Desce o elemento de i, trocando com o menor filho, até restaurar a
+        propriedade de heap, atualizando pos. Modifica o heap.
+    (c) O(log n): no máximo a altura do heap, O(1) por nível.
+    """
+    ids, chaves, pos = heap["ids"], heap["chaves"], heap["pos"]
+    tam = len(ids)
+    ident, chave = ids[i], chaves[i]
+    while True:
+        filho = 2 * i + 1
+        if filho >= tam:
+            break
+        if filho + 1 < tam and chaves[filho + 1] < chaves[filho]:
+            filho += 1                                
+        if chaves[filho] >= chave:
+            break
+        ids[i], chaves[i] = ids[filho], chaves[filho]  
+        pos[ids[i]] = i
+        i = filho
+    ids[i], chaves[i] = ident, chave
+    pos[ident] = i
+
+def heap_inserir(heap, ident, chave):
+    """
+    (a) Recebe: heap, id que ainda não está no heap e chave.
+    (b) Coloca o elemento no fim e o sobe. Modifica o heap.
+    (c) O(log n): append O(1) amortizado e um heap_subir.
+    """
+    heap["ids"].append(ident)
+    heap["chaves"].append(chave)
+    heap["pos"][ident] = len(heap["ids"]) - 1
+    heap_subir(heap, len(heap["ids"]) - 1)
+
+def heap_alterar(heap, ident, chave):
+    """
+    (a) Recebe: heap, id presente no heap e uma nova chave.
+    (b) Troca a chave e reposiciona: sobe se diminuiu, desce se aumentou.
+        Modifica o heap.
+    (c) O(log n): busca em pos O(1) esperado e um heap_subir ou heap_descer.
+    """
+    i = heap["pos"][ident]
+    antiga = heap["chaves"][i]
+    heap["chaves"][i] = chave
+    if chave < antiga:
+        heap_subir(heap, i)
+    elif chave > antiga:
+        heap_descer(heap, i)
+
+def heap_remover(heap, ident):
+    """
+    (a) Recebe: heap e id presente no heap.
+    (b) Remove o elemento: o último ocupa o lugar dele e é reposicionado
+        (sobe ou desce). Modifica o heap.
+    (c) O(log n): pop O(1) e um heap_subir ou heap_descer.
+    """
+    ids, chaves, pos = heap["ids"], heap["chaves"], heap["pos"]
+    i = pos.pop(ident)
+    ultimo_id = ids.pop()
+    ultima_chave = chaves.pop()
+    if i == len(ids):                 
+        return
+    ids[i], chaves[i] = ultimo_id, ultima_chave
+    pos[ultimo_id] = i
+    if i > 0 and chaves[(i - 1) // 2] > ultima_chave:
+        heap_subir(heap, i)
+    else:
+        heap_descer(heap, i)
+
+def nova_rede():
+    """
+    (a) Recebe: nada.
+    (b) Devolve uma rede vazia, um dicionário com os campos:
+        - lucros (dicionário id : lucro) e coords (dicionário id : (x, y)) dos vivos;
+        - fila (heap de novo_heap): um elemento por vivo, chave = lucro;
+        - total (int): soma dos lucros dos vivos;
+        - par_cache (str ou None): resposta do PAR para os vivos atuais, ou
+          None se precisa ser recalculada.
+        Invariantes entre as operações:
+        - lucros, coords e fila têm exatamente os mesmos ids, e a chave de
+          cada id na fila é lucros[id];
+        - total == soma de lucros.values();
+        - par_cache, se não for None, é a resposta correta para os vivos
+          atuais (inserir ou remover zera; mudar lucro não afeta).
+    (c) O(1).
+    """
+    return {"lucros": {}, "coords": {}, "fila": novo_heap(),
+            "total": 0, "par_cache": None}
+
+def inserir_deposito(rede, ident, x, y, lucro):
+    """
+    (a) Recebe: rede, id novo (nunca usado), coordenadas x, y e lucro.
+    (b) Cria o depósito vivo em lucros, coords e fila, soma o lucro ao total e
+        invalida par_cache. Modifica a rede.
+    (c) O(log n): inserções em dict O(1) esperado e heap_inserir O(log n).
+    """
+    rede["lucros"][ident] = lucro
+    rede["coords"][ident] = (x, y)
+    heap_inserir(rede["fila"], ident, lucro)
+    rede["total"] += lucro
+    rede["par_cache"] = None
+
+def mudar_lucro(rede, ident, lucro):
+    """
+    (a) Recebe: rede, ident (depósito vivo) e o novo lucro.
+    (b) Ajusta o total pela diferença, grava o novo lucro e reposiciona o
+        depósito na fila, as coordenadas não mudam.
+    (c) O(log n): acesso ao dict O(1) esperado e heap_alterar O(log n).
+    """
+    rede["total"] += lucro - rede["lucros"][ident]
+    rede["lucros"][ident] = lucro
+    heap_alterar(rede["fila"], ident, lucro)
+
+def remover_deposito(rede, ident):
+    """
+    (a) Recebe: rede e ident (depósito vivo).
+    (b) Função única de remoção: tira o depósito de fila, lucros e coords,
+        desconta o lucro do total e invalida par_cache. Modifica a rede.
+    (c) O(log n): heap_remover O(log n) e remoções em dict O(1) esperado.
+    """
+    heap_remover(rede["fila"], ident)
+    rede["total"] -= rede["lucros"].pop(ident)
+    del rede["coords"][ident]
+    rede["par_cache"] = None
+
+def remover_abaixo(rede, T):
+    """
+    (a) Recebe: rede e a tolerância mínima de lucro (T).
+    (b) Fecha todos os vivos com lucro estritamente menor que T. 
+    Devolve quantos foram removidos e modifica a rede.
+    (c) O((k+1) log n), com k removidos: cada remoção custa O(log n) e o
+        teste do topo é O(1); os demais vivos não são examinados.
+    """
+    fila = rede["fila"]
+    removidos = 0
+    while fila["ids"] and fila["chaves"][0] < T:
+        remover_deposito(rede, fila["ids"][0])
+        removidos += 1
+    return removidos
+
+def par_rec(pts, lo, hi):
+    """
+    (a) Recebe: pts, lista de tuplas (x, y, id) com pts[lo:hi] ordenado por
+        x (empates por y); lo e hi com hi - lo >= 2. 
+    (b) Devolve (d2, a, b): o menor quadrado de distância entre dois pontos
+        de pts[lo:hi] e os ids desses pontos. Ao terminar, pts[lo:hi] fica
+        ordenado por y (modifica pts nesse trecho).
+        Divide ao meio por índice (não por valor de x, que pode repetir),
+        resolve as metades e depois procura, na faixa vertical em torno da
+        divisória com (x - xm)^2 < d2, pares que cruzam as metades.
+    (c) O(m log m), m = hi - lo: T(m) = 2T(m/2) + O(m). O passo O(m) é a
+        junção das metades por y (sorted reconhece as duas sequências já
+        ordenadas e só as intercala), a montagem da faixa e sua varredura,
+        em que cada ponto é comparado com O(1) vizinhos (no máximo 7: num
+        retângulo d x 2d cabem poucos pontos a distância >= d entre si).
+        Espaço adicional O(m); profundidade da recursão O(log m).
+    """
+    if hi - lo <= 3:                                  
+        melhor_par = None
+        for i in range(lo, hi):
+            xi, yi, ai = pts[i]
+            for j in range(i + 1, hi):
+                xj, yj, aj = pts[j]
+                d2 = (xi - xj) ** 2 + (yi - yj) ** 2
+                if melhor_par is None or d2 < melhor_par[0]:
+                    melhor_par = (d2, ai, aj)
+        pts[lo:hi] = sorted(pts[lo:hi], key=lambda p: p[1])
+        return melhor_par
+
+    meio = (lo + hi) // 2
+    xm = pts[meio][0]               
+    esq = par_rec(pts, lo, meio)
+    dir_ = par_rec(pts, meio, hi)
+    melhor_par = esq if esq[0] <= dir_[0] else dir_
+
+    pts[lo:hi] = sorted(pts[lo:hi], key=lambda p: p[1])   # junção por y
+    d2_min = melhor_par[0]
+    faixa = [p for p in pts[lo:hi] if (p[0] - xm) ** 2 < d2_min]
+    for i in range(len(faixa)):
+        xi, yi, ai = faixa[i]
+        for j in range(i + 1, len(faixa)):
+            xj, yj, aj = faixa[j]
+            dy = yj - yi
+            if dy * dy >= d2_min:   
+                break
+            d2 = (xi - xj) ** 2 + dy * dy
+            if d2 < d2_min:
+                d2_min = d2
+                melhor_par = (d2, ai, aj)
+    return melhor_par
+
+def par(rede):
+    """
+    (a) Recebe: rede, com pelo menos dois vivos de coordenadas distintas.
+    (b) Devolve "a b d": ids a < b do par mais próximo e a distância
+        arredondada para cima, em aritmética inteira (menor t com
+        t*t >= d2). Usa par_cache se válido; senão ordena os pontos por x,
+        chama par_rec e guarda a resposta em par_cache.
+    (c) O(n log n) sem cache (ordenação + par_rec); O(1) com cache.
+        Espaço adicional O(n) para a lista de pontos, descartada ao final.
+    """
+    if rede["par_cache"] is None:
+        pts = sorted((x, y, ident) for ident, (x, y) in rede["coords"].items())
+        d2, a, b = par_rec(pts, 0, len(pts))
+        if a > b:
+            a, b = b, a
+        t = isqrt(d2)              
+        if t * t < d2:              
+            t += 1
+        rede["par_cache"] = f"{a} {b} {t}"
+    return rede["par_cache"]
 
 def novo_kadane():
     """
