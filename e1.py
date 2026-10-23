@@ -22,7 +22,7 @@ def atualizar_pilha(pilha, soma, k, L):
         pilha.append([k, L])
         soma += L
     elif L < 0:
-        d -= L
+        d = -L
         while d > 0 and pilha:
             j, r = pilha[-1]
             if r > d:
@@ -96,6 +96,7 @@ def main():
 
         k += 1                      
         atualizar_kadane(kadane, k, total)
+        soma_pilha = atualizar_pilha(pilha, soma_pilha, k, total)
 
     if saida:
         print("\n".join(saida))
