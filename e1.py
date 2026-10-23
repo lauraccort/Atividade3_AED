@@ -38,6 +38,11 @@ def main():
         pos += 2
         total += lucro - lucros[ident]
         lucros[ident] = lucro
+
+    elif op == "MELHOR":
+
+    elif op == "PROSPERIDADE":
+        
         
 if __name__ == "__main__":
     main()
