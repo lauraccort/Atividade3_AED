@@ -345,7 +345,7 @@ def par_rec(pts, lo, hi):
     dir_ = par_rec(pts, meio, hi)
     melhor_par = esq if esq[0] <= dir_[0] else dir_
 
-    pts[lo:hi] = sorted(pts[lo:hi], key=lambda p: p[1])   # junção por y
+    pts[lo:hi] = sorted(pts[lo:hi], key=lambda p: p[1])   
     d2_min = melhor_par[0]
     faixa = [p for p in pts[lo:hi] if (p[0] - xm) ** 2 < d2_min]
     for i in range(len(faixa)):
