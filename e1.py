@@ -73,7 +73,7 @@ def melhor(kadane):
         registrados. Não modifica nada.
     (c) O(1): só lê o estado mantido por atualizar_kadane.
     """
-    return f"{kadane["mi"]} {kadane["mj"]} {kadane["ms"]}"
+    return f"{kadane['mi']} {kadane['mj']} {kadane['ms']}"
 
 def atualizar_pilha(pilha, soma, k, L):
     """
